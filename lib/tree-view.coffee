@@ -1,10 +1,8 @@
 path = require 'path'
-{shell} = require 'electron'
-
 _ = require 'underscore-plus'
 {BufferedProcess, CompositeDisposable, Emitter} = require 'atom'
 {repoForPath, getStyleObject, getFullExtension} = require "./helpers"
-fs = require 'fs-plus'
+fs = require './fs-via-main'
 
 AddDialog = require './add-dialog'
 MoveDialog = require './move-dialog'
@@ -338,9 +336,15 @@ class TreeView
       @roots = for projectPath in projectPaths
         stats = fs.lstatSyncNoException(projectPath)
         continue unless stats
-        stats = _.pick stats, _.keys(stats)...
+        # Flatten Stats for Directory: modern Node only own-enumerates *Ms
+        # fields; Date getters live on the prototype and are lost after _.pick.
+        rawStats = stats
+        stats = _.pick rawStats, _.keys(rawStats)...
         for key in ["atime", "birthtime", "ctime", "mtime"]
-          stats[key] = stats[key].getTime()
+          if rawStats[key]?.getTime?
+            stats[key] = rawStats[key].getTime()
+          else if rawStats["#{key}Ms"]?
+            stats[key] = rawStats["#{key}Ms"]
 
         directory = new Directory({
           name: path.basename(projectPath)
@@ -575,7 +579,7 @@ class TreeView
     return unless fs.existsSync(filePath)
       atom.notifications.addWarning("Unable to show #{filePath} in #{@getFileManagerName()}")
 
-    shell.showItemInFolder(filePath)
+    atom.applicationDelegate.showItemInFolder(filePath)
 
   showCurrentFileInFileManager: ->
     return unless filePath = atom.workspace.getCenter().getActiveTextEditor()?.getPath()
@@ -583,7 +587,7 @@ class TreeView
     return unless fs.existsSync(filePath)
       atom.notifications.addWarning("Unable to show #{filePath} in #{@getFileManagerName()}")
 
-    shell.showItemInFolder(filePath)
+    atom.applicationDelegate.showItemInFolder(filePath)
 
   getFileManagerName: ->
     switch process.platform
@@ -638,33 +642,39 @@ class TreeView
     }, (response) =>
       if response is 0 # Move to Trash
         failedDeletions = []
-        for selectedPath in selectedPaths
-          # Don't delete entries which no longer exist. This can happen, for example, when:
-          # * The entry is deleted outside of Atom before "Move to Trash" is selected
-          # * A folder and one of its children are both selected for deletion,
-          #   but the parent folder is deleted first
-          continue unless fs.existsSync(selectedPath)
-
+        # Electron removed sync shell.moveItemToTrash; trash via main IPC.
+        trashNext = (index) =>
+          if index >= selectedPaths.length
+            if failedDeletions.length > 0
+              atom.notifications.addError @formatTrashFailureMessage(failedDeletions),
+                description: @formatTrashEnabledMessage()
+                detail: "#{failedDeletions.join('\n')}"
+                dismissable: true
+            if firstSelectedEntry = selectedEntries[0]
+              @selectEntry(firstSelectedEntry.closest('.directory:not(.selected)'))
+            @updateRoots() if atom.config.get('tree-view.squashDirectoryNames')
+            return
+          selectedPath = selectedPaths[index]
+          # Don't delete entries which no longer exist (race with external delete
+          # or parent folder deleted first when both selected).
+          unless fs.existsSync(selectedPath)
+            trashNext(index + 1)
+            return
           @emitter.emit 'will-delete-entry', {pathToDelete: selectedPath}
-          if shell.moveItemToTrash(selectedPath)
-            @emitter.emit 'entry-deleted', {pathToDelete: selectedPath}
-          else
+          atom.applicationDelegate.moveItemToTrash(selectedPath).then (ok) =>
+            if ok
+              @emitter.emit 'entry-deleted', {pathToDelete: selectedPath}
+            else
+              @emitter.emit 'delete-entry-failed', {pathToDelete: selectedPath}
+              failedDeletions.push selectedPath
+            if repo = repoForPath(selectedPath)
+              repo.getPathStatus(selectedPath)
+            trashNext(index + 1)
+          .catch =>
             @emitter.emit 'delete-entry-failed', {pathToDelete: selectedPath}
             failedDeletions.push selectedPath
-
-          if repo = repoForPath(selectedPath)
-            repo.getPathStatus(selectedPath)
-
-        if failedDeletions.length > 0
-          atom.notifications.addError @formatTrashFailureMessage(failedDeletions),
-            description: @formatTrashEnabledMessage()
-            detail: "#{failedDeletions.join('\n')}"
-            dismissable: true
-
-        # Focus the first parent folder
-        if firstSelectedEntry = selectedEntries[0]
-          @selectEntry(firstSelectedEntry.closest('.directory:not(.selected)'))
-        @updateRoots() if atom.config.get('tree-view.squashDirectoryNames')
+            trashNext(index + 1)
+        trashNext(0)
     )
 
   formatTrashFailureMessage: (failedDeletions) ->

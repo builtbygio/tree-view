@@ -1,4 +1,4 @@
-fs = require 'fs-plus'
+fs = require './fs-via-main'
 path = require 'path'
 
 class DefaultFileIcons

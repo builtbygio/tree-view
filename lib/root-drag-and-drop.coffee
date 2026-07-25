@@ -1,6 +1,6 @@
 url = require 'url'
 
-{ipcRenderer, remote} = require 'electron'
+{ipcRenderer} = require 'electron'
 
 # TODO: Support dragging external folders and using the drag-and-drop indicators for them
 # Currently they're handled in TreeView's drag listeners
@@ -146,8 +146,7 @@ class RootDragAndDropHandler
 
       if not isNaN(fromWindowId)
         # Let the window where the drag started know that the tab was dropped
-        browserWindow = remote.BrowserWindow.fromId(fromWindowId)
-        browserWindow?.webContents.send('tree-view:project-folder-dropped', fromIndex)
+        ipcRenderer.send('atom-webcontents-send-to-window-id', fromWindowId, 'tree-view:project-folder-dropped', fromIndex)
 
   getDropTargetIndex: (e) ->
     return if @isPlaceholder(e.target)
@@ -198,4 +197,4 @@ class RootDragAndDropHandler
     element.classList.contains('.placeholder')
 
   getWindowId: ->
-    @processId ?= atom.getCurrentWindow().id
+    @processId ?= ipcRenderer.sendSync('atom-get-current-window-id-sync')
