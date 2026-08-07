@@ -1,103 +1,126 @@
-/** @babel */
-
-export function beforeEach (fn) {
-  global.beforeEach(function () {
-    const result = fn()
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+var async_spec_helpers_exports = {};
+__export(async_spec_helpers_exports, {
+  afterEach: () => afterEach,
+  beforeEach: () => beforeEach,
+  conditionPromise: () => conditionPromise,
+  emitterEventPromise: () => emitterEventPromise,
+  promisify: () => promisify,
+  promisifySome: () => promisifySome,
+  timeoutPromise: () => timeoutPromise
+});
+module.exports = __toCommonJS(async_spec_helpers_exports);
+function beforeEach(fn) {
+  global.beforeEach(function() {
+    const result = fn();
     if (result instanceof Promise) {
-      waitsForPromise(() => result)
+      waitsForPromise(() => result);
     }
-  })
+  });
 }
-
-export function afterEach (fn) {
-  global.afterEach(function () {
-    const result = fn()
+function afterEach(fn) {
+  global.afterEach(function() {
+    const result = fn();
     if (result instanceof Promise) {
-      waitsForPromise(() => result)
+      waitsForPromise(() => result);
     }
-  })
+  });
 }
-
-['it', 'fit', 'ffit', 'fffit'].forEach(function (name) {
-  module.exports[name] = function (description, fn) {
-    if (fn === undefined) {
-      global[name](description)
-      return
+["it", "fit", "ffit", "fffit"].forEach(function(name) {
+  module.exports[name] = function(description, fn) {
+    if (fn === void 0) {
+      global[name](description);
+      return;
     }
-
-    global[name](description, function () {
-      const result = fn()
+    global[name](description, function() {
+      const result = fn();
       if (result instanceof Promise) {
-        waitsForPromise(() => result)
+        waitsForPromise(() => result);
       }
-    })
-  }
-})
-
-export async function conditionPromise (condition, description = 'anonymous condition') {
-  const startTime = Date.now()
-
+    });
+  };
+});
+async function conditionPromise(condition, description = "anonymous condition") {
+  const startTime = Date.now();
   while (true) {
-    await timeoutPromise(100)
-
+    await timeoutPromise(100);
     if (await condition()) {
-      return
+      return;
     }
-
-    if (Date.now() - startTime > 5000) {
-      throw new Error('Timed out waiting on ' + description)
+    if (Date.now() - startTime > 5e3) {
+      throw new Error("Timed out waiting on " + description);
     }
   }
 }
-
-export function timeoutPromise (timeout) {
-  return new Promise(function (resolve) {
-    global.setTimeout(resolve, timeout)
-  })
+function timeoutPromise(timeout) {
+  return new Promise(function(resolve) {
+    global.setTimeout(resolve, timeout);
+  });
 }
-
-function waitsForPromise (fn) {
-  const promise = fn()
-  global.waitsFor('spec promise to resolve', function (done) {
-    promise.then(done, function (error) {
-      jasmine.getEnv().currentSpec.fail(error)
-      done()
-    })
-  })
+function waitsForPromise(fn) {
+  const promise = fn();
+  global.waitsFor("spec promise to resolve", function(done) {
+    promise.then(done, function(error) {
+      jasmine.getEnv().currentSpec.fail(error);
+      done();
+    });
+  });
 }
-
-export function emitterEventPromise (emitter, event, timeout = 15000) {
+function emitterEventPromise(emitter, event, timeout = 15e3) {
   return new Promise((resolve, reject) => {
     const timeoutHandle = setTimeout(() => {
-      reject(new Error(`Timed out waiting for '${event}' event`))
-    }, timeout)
+      reject(new Error(`Timed out waiting for '${event}' event`));
+    }, timeout);
     emitter.once(event, () => {
-      clearTimeout(timeoutHandle)
-      resolve()
-    })
-  })
+      clearTimeout(timeoutHandle);
+      resolve();
+    });
+  });
 }
-
-export function promisify (original) {
-  return function (...args) {
+function promisify(original) {
+  return function(...args) {
     return new Promise((resolve, reject) => {
       args.push((err, ...results) => {
         if (err) {
-          reject(err)
+          reject(err);
         } else {
-          resolve(...results)
+          resolve(...results);
         }
-      })
-
-      return original(...args)
-    })
-  }
+      });
+      return original(...args);
+    });
+  };
 }
-
-export function promisifySome (obj, fnNames) {
-  const result = {}
+function promisifySome(obj, fnNames) {
+  const result = {};
   for (const fnName of fnNames) {
-    result[fnName] = promisify(obj[fnName])
+    result[fnName] = promisify(obj[fnName]);
   }
-  return result
+  return result;
 }
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  afterEach,
+  beforeEach,
+  conditionPromise,
+  emitterEventPromise,
+  promisify,
+  promisifySome,
+  timeoutPromise
+});
